@@ -8,6 +8,7 @@ defmodule ReqAthena.S3 do
     manifest_csv_location = output_location <> "-manifest.csv"
 
     req_s3
+    |> Req.merge(decode_body: false)
     |> get_body(manifest_csv_location)
     |> String.trim()
     |> String.split("\n")
