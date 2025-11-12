@@ -351,12 +351,12 @@ defmodule ReqAthena do
   end
 
   defp get_json_result(request, response) do
-    output_location = Request.get_private(request, :athena_output_location)
+    manifest_location = Request.get_private(request, :athena_manifest_location)
 
     aws_credentials = aws_credentials_from_request(request)
     req_s3 = ReqAthena.S3.new(aws_credentials)
 
-    locations = ReqAthena.S3.get_locations(req_s3, output_location)
+    locations = ReqAthena.S3.get_locations(req_s3, manifest_location)
 
     # OPTIMIZE: use tasks to retrieve locations.
     results =
@@ -374,7 +374,7 @@ defmodule ReqAthena do
   end
 
   defp get_explorer_result(request, response) do
-    output_location = Request.get_private(request, :athena_output_location)
+    manifest_location = Request.get_private(request, :athena_manifest_location)
 
     aws_credentials = aws_credentials_from_request(request)
 
@@ -384,7 +384,7 @@ defmodule ReqAthena do
 
     decode_body = Req.Request.get_option(request, :decode_body, true)
 
-    result = fetcher_and_builder.(output_location, aws_credentials, decode_body)
+    result = fetcher_and_builder.(manifest_location, aws_credentials, decode_body)
 
     Request.halt(request, %{response | body: result})
   end
@@ -397,9 +397,9 @@ defmodule ReqAthena do
   end
 
   @doc false
-  def fetch_and_build_dataframe(output_location, aws_credentials, decode_body) do
+  def fetch_and_build_dataframe(manifest_location, aws_credentials, decode_body) do
     req_s3 = ReqAthena.S3.new(aws_credentials)
-    locations = ReqAthena.S3.get_locations(req_s3, output_location)
+    locations = ReqAthena.S3.get_locations(req_s3, manifest_location)
 
     if decode_body do
       build_lazy_frame(locations, aws_credentials)
@@ -456,13 +456,17 @@ defmodule ReqAthena do
         Request.halt(request, Req.post!(request))
 
       "SUCCEEDED" ->
+        output_location = body["QueryExecution"]["ResultConfiguration"]["OutputLocation"]
+
+        manifest_location =
+          body["QueryExecution"]["Statistics"]["DataManifestLocation"] ||
+            output_location <> "-manifest.csv"
+
         request =
           request
           |> prepare_action("GetQueryResults")
-          |> Request.put_private(
-            :athena_output_location,
-            body["QueryExecution"]["ResultConfiguration"]["OutputLocation"]
-          )
+          |> Request.put_private(:athena_output_location, output_location)
+          |> Request.put_private(:athena_manifest_location, manifest_location)
           |> Request.put_private(:athena_query_execution_id, query_execution_id)
 
         Request.halt(request, Req.post!(request))
