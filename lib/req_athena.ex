@@ -268,7 +268,7 @@ defmodule ReqAthena do
       Map.merge(output_config, %{
         QueryExecutionContext: %{
           Database: Request.fetch_option!(request, :database),
-          Catalog: Request.fetch_option!(request, :catalog)
+          Catalog: Request.get_option(request, :catalog)
         },
         QueryString: ReqAthena.Query.to_query_string(query)
       })
