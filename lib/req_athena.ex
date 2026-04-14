@@ -19,6 +19,7 @@ defmodule ReqAthena do
     workgroup
     region
     database
+    catalog
     athena
     output_location
     cache_query
@@ -265,7 +266,10 @@ defmodule ReqAthena do
 
     body =
       Map.merge(output_config, %{
-        QueryExecutionContext: %{Database: Request.fetch_option!(request, :database)},
+        QueryExecutionContext: %{
+          Database: Request.fetch_option!(request, :database),
+          Catalog: Request.fetch_option!(request, :catalog)
+        },
         QueryString: ReqAthena.Query.to_query_string(query)
       })
 
