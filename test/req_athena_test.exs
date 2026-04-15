@@ -164,6 +164,7 @@ defmodule ReqAthenaTest do
           assert %{
                    "ClientRequestToken" => ^client_req_token,
                    "QueryExecutionContext" => %{
+                     "Catalog" => nil,
                      "Database" => "my_awesome_database"
                    },
                    "QueryString" => "EXECUTE query_8CD6B60FAFA18EBFA8719A6EAC192624 USING 1",
@@ -181,6 +182,7 @@ defmodule ReqAthenaTest do
           assert %{
                    "ClientRequestToken" => ^client_req_token,
                    "QueryExecutionContext" => %{
+                     "Catalog" => nil,
                      "Database" => "my_awesome_database"
                    },
                    "QueryString" =>
@@ -346,7 +348,10 @@ defmodule ReqAthenaTest do
 
         assert %{
                  "ClientRequestToken" => ^client_req_token,
-                 "QueryExecutionContext" => %{"Database" => "my_awesome_database"},
+                 "QueryExecutionContext" => %{
+                   "Catalog" => nil,
+                   "Database" => "my_awesome_database"
+                 },
                  "QueryString" => "select * from iris",
                  "WorkGroup" => "default"
                } = decoded
