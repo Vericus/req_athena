@@ -266,7 +266,8 @@ defmodule ReqAthena do
     body =
       Map.merge(output_config, %{
         QueryExecutionContext: %{Database: Request.fetch_option!(request, :database)},
-        QueryString: ReqAthena.Query.to_query_string(query)
+        QueryString: ReqAthena.Query.to_query_string(query),
+        ExecutionParameters: ReqAthena.Query.execution_params(query)
       })
 
     client_request_token = generate_client_request_token(body, cache_query)
@@ -291,19 +292,15 @@ defmodule ReqAthena do
 
   defp handle_athena_result({request, %{status: 200} = response}) do
     action = Request.get_private(request, :athena_action)
-    query = Request.get_private(request, :athena_query)
 
-    case {action, ReqAthena.Query.to_prepare?(query)} do
-      {"StartQueryExecution", _} ->
+    case action do
+      "StartQueryExecution" ->
         get_query_state(request, response)
 
-      {"GetQueryExecution", _} ->
+      "GetQueryExecution" ->
         wait_query_execution(request, response)
 
-      {"GetQueryResults", true} ->
-        execute_prepared_query(request)
-
-      {"GetQueryResults", _} ->
+      "GetQueryResults" ->
         output_format = Request.get_option(request, :format, :none)
 
         case output_format do
@@ -488,23 +485,6 @@ defmodule ReqAthena do
           Request.halt(request, response)
         end
     end
-  end
-
-  @athena_keys ~w(athena_action athena_query athena_wait_count)a
-
-  defp execute_prepared_query(request) do
-    {ours_private, theirs_private} = Map.split(request.private, @athena_keys)
-
-    %ReqAthena.Query{prepared: false} = query = ours_private.athena_query
-    prepared_query = %ReqAthena.Query{query | prepared: true}
-
-    request = %{
-      request
-      | private: theirs_private,
-        current_request_steps: Keyword.keys(request.request_steps)
-    }
-
-    Request.halt(request, Req.post!(put_request_body(request, prepared_query)))
   end
 
   defp prepare_action(request, action) when is_binary(action) do
