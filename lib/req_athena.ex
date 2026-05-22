@@ -444,7 +444,7 @@ defmodule ReqAthena do
         count = Request.get_private(request, :athena_wait_count, 1)
 
         if count >= 3 do
-          Logger.info("ReqAthena: query is in QUEUED state, will retry in #{@wait_delay}ms")
+          Logger.debug("ReqAthena: query is in QUEUED state, will retry in #{@wait_delay}ms")
         end
 
         request = Request.put_private(request, :athena_wait_count, count + 1)
