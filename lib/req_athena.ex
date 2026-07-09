@@ -26,6 +26,8 @@ defmodule ReqAthena do
     format
     decode_body
     output_compression
+    athena_extra_step
+    s3_extra_step
   )a
 
   @credential_keys ~w(access_key_id secret_access_key region token)a
@@ -98,6 +100,7 @@ defmodule ReqAthena do
     |> Request.prepend_request_steps(athena_run: &run/1)
     |> Request.register_options(@allowed_options)
     |> Request.merge_options(opts)
+    |> maybe_add_athena_extra_step()
     |> maybe_put_aws_credentials()
     |> put_signature_options()
   end
@@ -342,7 +345,8 @@ defmodule ReqAthena do
     result =
       if Req.Request.get_option(request, :decode_body, true) do
         aws_credentials = aws_credentials_from_request(request)
-        req_s3 = ReqAthena.S3.new(aws_credentials)
+        s3_extra_step = Req.Request.get_option(request, :s3_extra_step)
+        req_s3 = ReqAthena.S3.new(aws_credentials, s3_extra_step: s3_extra_step)
         ReqAthena.S3.get_body(req_s3, csv_location)
       else
         csv_location
@@ -355,7 +359,8 @@ defmodule ReqAthena do
     manifest_location = Request.get_private(request, :athena_manifest_location)
 
     aws_credentials = aws_credentials_from_request(request)
-    req_s3 = ReqAthena.S3.new(aws_credentials)
+    s3_extra_step = Req.Request.get_option(request, :s3_extra_step)
+    req_s3 = ReqAthena.S3.new(aws_credentials, s3_extra_step: s3_extra_step)
 
     locations = ReqAthena.S3.get_locations(req_s3, manifest_location)
 
@@ -381,11 +386,17 @@ defmodule ReqAthena do
 
     # This private field is only meant to be used in tests.
     fetcher_and_builder =
-      Request.get_private(request, :athena_dataframe_builder, &fetch_and_build_dataframe/3)
+      Request.get_private(request, :athena_dataframe_builder, &fetch_and_build_dataframe/4)
 
     decode_body = Req.Request.get_option(request, :decode_body, true)
 
-    result = fetcher_and_builder.(manifest_location, aws_credentials, decode_body)
+    result =
+      fetcher_and_builder.(
+        manifest_location,
+        aws_credentials,
+        decode_body,
+        Req.Request.get_option(request, :s3_extra_step)
+      )
 
     Request.halt(request, %{response | body: result})
   end
@@ -398,8 +409,8 @@ defmodule ReqAthena do
   end
 
   @doc false
-  def fetch_and_build_dataframe(manifest_location, aws_credentials, decode_body) do
-    req_s3 = ReqAthena.S3.new(aws_credentials)
+  def fetch_and_build_dataframe(manifest_location, aws_credentials, decode_body, s3_extra_step) do
+    req_s3 = ReqAthena.S3.new(aws_credentials, s3_extra_step: s3_extra_step)
     locations = ReqAthena.S3.get_locations(req_s3, manifest_location)
 
     if decode_body do
@@ -507,6 +518,16 @@ defmodule ReqAthena do
       {"X-Amz-Target", "AmazonAthena.#{action}"},
       {"Content-Type", "application/x-amz-json-1.1"}
     ])
+  end
+
+  defp maybe_add_athena_extra_step(request) do
+    case request.options[:athena_extra_step] do
+      nil ->
+        request
+
+      {mod, fun} when is_atom(mod) and is_atom(fun) ->
+        apply(mod, fun, [request])
+    end
   end
 
   defp maybe_put_aws_credentials(request) do
