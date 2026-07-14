@@ -41,7 +41,7 @@ defmodule ReqAthena.MixProject do
 
   defp deps do
     [
-      {:req, "~> 0.5.0"},
+      {:req, "~> 0.5.0 or ~> 0.6.0"},
       {:req_s3, "~> 0.2"},
       {:aws_credentials, "~> 0.2", optional: true},
       {:explorer, "~> 0.9", optional: true},
