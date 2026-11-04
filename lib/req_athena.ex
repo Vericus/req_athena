@@ -461,11 +461,11 @@ defmodule ReqAthena do
 
         request = Request.put_private(request, :athena_wait_count, count + 1)
         Process.sleep(@wait_delay)
-        Request.halt(request, Req.post!(request))
+        Request.halt(request, poll_query_execution(request))
 
       "RUNNING" ->
         Process.sleep(@wait_delay)
-        Request.halt(request, Req.post!(request))
+        Request.halt(request, poll_query_execution(request))
 
       "SUCCEEDED" ->
         output_location = body["QueryExecution"]["ResultConfiguration"]["OutputLocation"]
@@ -500,6 +500,13 @@ defmodule ReqAthena do
           Request.halt(request, response)
         end
     end
+  end
+
+  # Each poll is signed afresh, since SigV4 signatures expire after five minutes.
+  defp poll_query_execution(request) do
+    request
+    |> prepare_action("GetQueryExecution")
+    |> Req.post!()
   end
 
   defp prepare_action(request, action) when is_binary(action) do
