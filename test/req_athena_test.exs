@@ -333,6 +333,57 @@ defmodule ReqAthenaTest do
     assert_received :token_validation
   end
 
+  test "signs each poll of a running query afresh" do
+    me = self()
+
+    validations = %{
+      "StartQueryExecution" => fn _request -> :ok end,
+      "GetQueryExecution" => fn request ->
+        [amz_date] = Req.Request.get_header(request, "x-amz-date")
+        [authorization] = Req.Request.get_header(request, "authorization")
+        send(me, {:poll, amz_date, authorization})
+      end
+    }
+
+    results = %{
+      "GetQueryExecution" => fn request ->
+        polls = Process.get(:polls, 0)
+        Process.put(:polls, polls + 1)
+        state = if polls == 0, do: "RUNNING", else: "SUCCEEDED"
+
+        body = %{
+          QueryExecution: %{
+            QueryExecutionId: "an uuid",
+            ResultConfiguration: %{OutputLocation: "s3://foo"},
+            Status: %{State: state}
+          }
+        }
+
+        {request, %Req.Response{status: 200, body: Jason.encode!(body)}}
+      end
+    }
+
+    opts = [
+      access_key_id: "some key",
+      secret_access_key: "dummy",
+      region: "us-east-1",
+      database: "my_awesome_database",
+      output_location: "s3://foo"
+    ]
+
+    response =
+      ReqAthena.new(opts)
+      |> Req.merge(adapter: fake_athena(validations, results))
+      |> ReqAthena.query!("select * from iris")
+
+    assert response.status == 200
+
+    assert_received {:poll, first_date, first_authorization}
+    assert_received {:poll, second_date, second_authorization}
+    assert first_date != second_date
+    assert first_authorization != second_authorization
+  end
+
   test "executes a query with workgroup" do
     me = self()
 
